@@ -1,0 +1,25 @@
+[package]
+name = "axum_client_derive"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+reqwest = ["dep:reqwest"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = {version="1.0.99", features=["full"]}
+quote = "1.0"
+reqwest = {version="0.11.11",features=["json"],optional=true}
+
+[dev-dependencies]
+serde = {version="1.0.144",features=["derive"]}
+axum = {version="0.6.0-rc.1",features=["headers"]}
+tokio = {version = "1.21.0",features=["full"]}
+headers = "0.3.8"
+http = "0.2.8"
+bytes = "1.2.1"
+
