@@ -3,7 +3,7 @@ use quote::{format_ident, quote, ToTokens};
 use syn;
 use syn::{AttributeArgs, FnArg, Ident, ItemFn, Lit, LitStr, NestedMeta, parse_macro_input, Pat, PathArguments, PathSegment, PatType, ReturnType, Type};
 use syn::__private::TokenStream2;
-use syn::punctuated::Pair;
+use syn::punctuated::{Pair, Pairs};
 use syn::token::Comma;
 
 #[feature(reqwest)]
@@ -25,11 +25,9 @@ struct ParseSignature<'a>{
     func_generics:Vec<TokenStream2>,
     method:LitStr,
 }
-fn parse_signature<'a>(attr:&'a AttributeArgs,item:&'a ItemFn) -> ParseSignature<'a>{
-    let name = &item.sig.ident;
-    let mut args: Vec<(Ident,Type)> = {
+fn parse_input_pairs(pairs:Pairs<FnArg,Comma>) -> Vec<(Ident,PathSegment)> {
         let mut args = Vec::new();
-        for pair in item.sig.inputs.pairs(){
+        for pair in pairs{
             match pair {
                 Pair::Punctuated(arg, _) => {
                     match arg {
@@ -86,22 +84,25 @@ fn parse_signature<'a>(attr:&'a AttributeArgs,item:&'a ItemFn) -> ParseSignature
                 }
             }
         }
-        args
-    };
-    let args_old = args.into_iter()
-        .map(|(var,ty)|{
-            (var, match ty {
-                Type::Path(ty_path) => {
-                    ty_path.path.segments
-                        .pairs()
-                        .into_iter()
-                        .last()
-                        .unwrap()
-                        .into_value().clone()
-                },
-                _ => panic!("types in fn args must be simple path segmented types")
-            })
-        }).collect::<Vec<(Ident,PathSegment)>>();
+        args.into_iter()
+            .map(|(var,ty)|{
+                (var, match ty {
+                    Type::Path(ty_path) => {
+                        ty_path.path.segments
+                            .pairs()
+                            .into_iter()
+                            .last()
+                            .unwrap()
+                            .into_value().clone()
+                    },
+                    _ => panic!("types in fn args must be simple path segmented types")
+                })
+            }).collect::<Vec<(Ident,PathSegment)>>()
+}
+
+fn parse_signature<'a>(attr:&'a AttributeArgs,item:&'a ItemFn) -> ParseSignature<'a>{
+    let name = &item.sig.ident;
+    let mut args_old = parse_input_pairs(item.sig.inputs.pairs().clone());
     let (
         args,
         headers,
@@ -146,10 +147,8 @@ fn parse_signature<'a>(attr:&'a AttributeArgs,item:&'a ItemFn) -> ParseSignature
             } else if ty_ident == format_ident!("Bytes") {
                 args.push(quote!(#var : bytes::Bytes));
                 body = BodyVariant::Bytes(var.clone());
-            } else if ty_ident == format_ident!("State") {
-
             } else {
-                panic!("{}",ty_token);
+
             }
         }
         (
@@ -172,6 +171,7 @@ fn parse_signature<'a>(attr:&'a AttributeArgs,item:&'a ItemFn) -> ParseSignature
         method,name,args,headers,func_generics,body
     }
 }
+
 fn impl_reqwest_fn(attr:&AttributeArgs,item:&ItemFn) -> TokenStream {
     let ParseSignature{
         name,
